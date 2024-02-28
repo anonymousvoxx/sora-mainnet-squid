@@ -1,0 +1,269 @@
+import { SubstrateBatchProcessor } from '@subsquid/substrate-processor'
+import typesBundle from './typesBundle.json'
+import { TypeormDatabase } from '@subsquid/typeorm-store'
+import { assetRegistrationCallHandler } from './handlers/calls/assetRegistration'
+import { batchTransactionsCallHandler } from './handlers/calls/batchTransactions'
+import { demeterDepositCallHandler } from './handlers/calls/demeterDeposit'
+import { demeterGetRewardsCallHandler } from './handlers/calls/demeterGetRewards'
+import { demeterWithdrawCallHandler } from './handlers/calls/demeterWithdraw'
+import { irohaMigrationCallHandler } from './handlers/calls/irohaMigration'
+import { liquidityDepositCallHandler } from './handlers/calls/liquidityDeposit'
+import { liquidityRemovalCallHandler } from './handlers/calls/liquidityRemoval'
+import { referralReserveCallHandler } from './handlers/calls/referralReserve'
+import { referralUnreserveCallHandler } from './handlers/calls/referralUnreserve'
+import { rewardsCallHandler } from './handlers/calls/rewards'
+import { setReferralCallHandler } from './handlers/calls/setReferral'
+import { soraEthTransferCallHandler } from './handlers/calls/soraEthTransfer'
+import { swapsCallHandler } from './handlers/calls/swaps'
+import { assetTransferCallHandler, xorlessTransferHandler } from './handlers/calls/transfers'
+import { ethSoraTransferEventHandler } from './handlers/events/ethSoraTransfer'
+import { tokenBurnEventHandler, tokenMintEventHandler, xorBurnEventHandler, xorMintEventHandler } from './handlers/events/mintAndBurn'
+import { networkFeeEventHandler } from './handlers/events/networkFee'
+import { referrerRewardEventHandler } from './handlers/events/referrerReward'
+import { transferEventHandler } from './handlers/events/transfer'
+import { initializeAssets } from './handlers/models/initializeAssets'
+import { initializePools } from './handlers/models/initializePools'
+import { syncModels, updateDailyStats, updateAssetsWeeklyStats } from './handlers/sync/models'
+import { syncPoolXykPrices } from './handlers/sync/prices'
+import { callNames, eventNames } from './consts'
+import { assetRegistrationEventHandler, syntheticAssetEnabledEventHandler } from './handlers/events/assetsRegistration'
+import { chain, archive, startBlock } from './config'
+import { stakingRewardedEventHandler } from './handlers/events/rewards'
+import { swapTransferBatchHandler } from './handlers/calls/swapTransferBatch'
+import {
+	stakingBondCallHandler,
+	stakingBondExtraCallHandler,
+	stakingCancelDeferredSlashCallHandler,
+	stakingChillCallHandler,
+	stakingChillOtherCallHandler,
+	stakingForceApplyMinCommissionCallHandler,
+	stakingForceNewEraCallHandler,
+	stakingForceNewEraAlwaysCallHandler,
+	stakingForceNoErasCallHandler,
+	stakingForceUnstakeCallHandler,
+	stakingIncreaseValidatorCountCallHandler,
+	stakingKickCallHandler,
+	stakingNominateCallHandler,
+	stakingPayoutStakersCallHandler,
+	stakingReapStashCallHandler,
+	stakingRebondCallHandler,
+	stakingScaleValidatorCountCallHandler,
+	stakingSetControllerCallHandler,
+	stakingSetHistoryDepthCallHandler,
+	stakingSetInvulnerablesCallHandler,
+	stakingSetMinCommissionCallHandler,
+	stakingSetPayeeCallHandler,
+	stakingSetStakingConfigsCallHandler,
+	stakingSetValidatorCountCallHandler,
+	stakingSubmitElectionSolutionCallHandler,
+	stakingSubmitElectionSolutionUnsignedCallHandler,
+	stakingUnbondCallHandler,
+	stakingValidateCallHandler,
+	stakingWithdrawUnbondedCallHandler,
+} from './handlers/calls/staking'
+import {
+	transactionFeePaidHandler,
+	xcmPalletAttemptedHandler,
+	messageAcceptedHandler,
+	systemExtrinsicFailedHandler,
+	systemExtrinsicSuccessHandler,
+	messageDispatchedHandler,
+	requestStatusUpdateHandler,
+	mintedHandler,
+	burnedHandler
+} from './handlers/calls/bridge'
+import { stakingStakersElectedEventHandler } from './handlers/events/staking'
+import { lookupArchive } from '@subsquid/archive-registry'
+import { syncStreams } from './handlers/sync/streams'
+import { initializeOrderBooks } from './handlers/models/initializeOrderBooks'
+import {
+	orderBookCreatedEventHandler,
+	orderBookLimitOrderCanceledEventHandler,
+	orderBookLimitOrderConvertedToMarketOrderEventHandler,
+	orderBookLimitOrderExecutedEventHandler,
+	orderBookLimitOrderFilledEventHandler,
+	orderBookLimitOrderIsSplitIntoMarketOrderAndLimitOrderEventHandler,
+	orderBookLimitOrderPlacedEventHandler,
+	orderBookLimitOrderUpdatedEventHandler,
+	orderBookMarketOrderExecutedEventHandler,
+	orderBookStatusChangedEventHandler
+} from './handlers/events/orderBook'
+import {
+	orderBookCancelLimitOrderCallHandler,
+	orderBookPlaceLimitOrderCallHandler
+} from './handlers/calls/orderBook'
+import { getSortedItems } from './utils/processor'
+import { handleBandRateUpdate } from './handlers/calls/band'
+
+export const processor = new SubstrateBatchProcessor()
+	.setRpcEndpoint({
+		url: chain,
+		rateLimit: 10
+	})
+	.setTypesBundle(typesBundle as any)
+	.setBlockRange({ from: startBlock })
+	.setFields({
+		extrinsic: {
+			success: true,
+			error: true,
+			hash: true,
+			signature: true,
+		},
+		block: {
+			timestamp: true,
+		}
+	})
+
+if (archive) {
+	processor.setGateway(lookupArchive(archive, { type: 'Substrate', release: 'ArrowSquid' }))
+}
+ 
+callNames.forEach((callName) => {
+	processor.addCall({ name: [callName], extrinsic: true })
+})
+
+eventNames.forEach((eventName) => {
+	processor.addEvent({ name: [eventName], extrinsic: true })
+})
+
+let lastSyncedBlock = -1
+
+processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
+	ctx._chain
+	const context = ctx
+	
+	for (let block of context.blocks) {
+		let blockContext = {
+			...context,
+			block,
+			now: performance.now(),
+		}
+
+		await initializeAssets(blockContext)
+		await initializePools(blockContext)
+		await initializeOrderBooks(blockContext)
+
+		if (lastSyncedBlock !== block.header.height) {
+			await syncPoolXykPrices(blockContext)
+			await syncStreams(blockContext)
+			// Once in 5 minutes
+			if (block.header.height % 50 === 0) {
+				await syncModels(blockContext)
+			}
+			// Once in 1 hour
+			if (block.header.height % 600 === 0) {
+				await updateDailyStats(blockContext)
+			}
+			// Once in 4 hours
+			if (block.header.height % 2_400 === 0) {
+				await updateAssetsWeeklyStats(blockContext)
+			}
+			lastSyncedBlock = block.header.height
+		}
+
+		for (let item of getSortedItems(block)) {
+			if (item.kind === 'call') {
+				const { call } = item
+
+				if (call.name !== call.extrinsic?.call?.name) {
+					continue
+				}
+	
+				if (call.name === 'Assets.register') await assetRegistrationCallHandler(blockContext, call)
+				if (call.name === 'Assets.transfer') await assetTransferCallHandler(blockContext, call)
+				if (call.name === 'LiquidityProxy.xorless_transfer') await xorlessTransferHandler(blockContext, call)
+				if (call.name === 'LiquidityProxy.swap' || call.name === 'LiquidityProxy.swap_transfer')
+					await swapsCallHandler(blockContext, call)
+				if (call.name === 'LiquidityProxy.swap_transfer_batch') await swapTransferBatchHandler(blockContext, call)
+				if (call.name === 'PoolXYK.deposit_liquidity') await liquidityDepositCallHandler(blockContext, call)
+				if (call.name === 'PoolXYK.withdraw_liquidity') await liquidityRemovalCallHandler(blockContext, call)
+				if (call.name === 'IrohaMigration.migrate') await irohaMigrationCallHandler(blockContext, call)
+				if (call.name === 'Utility.batch_all') await batchTransactionsCallHandler(blockContext, call)
+				if (call.name === 'EthBridge.transfer_to_sidechain') await soraEthTransferCallHandler(blockContext, call)
+				if (
+					call.name === 'PswapDistribution.claim_incentive' ||
+					call.name === 'Rewards.claim' ||
+					call.name === 'VestedRewards.claim_rewards' ||
+					call.name === 'VestedRewards.claim_crowdloan_rewards'
+				)
+					await rewardsCallHandler(blockContext, call)
+				if (call.name === 'Referrals.set_referrer') await setReferralCallHandler(blockContext, call)
+				if (call.name === 'Referrals.reserve') await referralReserveCallHandler(blockContext, call)
+				if (call.name === 'Referrals.unreserve') await referralUnreserveCallHandler(blockContext, call)
+				if (call.name === 'DemeterFarmingPlatform.deposit') await demeterDepositCallHandler(blockContext, call)
+				if (call.name === 'DemeterFarmingPlatform.withdraw') await demeterWithdrawCallHandler(blockContext, call)
+				if (call.name === 'DemeterFarmingPlatform.get_rewards') await demeterGetRewardsCallHandler(blockContext, call)
+				if (call.name === 'Band.relay') await handleBandRateUpdate(blockContext, call)
+	
+				if (call.name === 'Staking.bond') await stakingBondCallHandler(blockContext, call)
+				if (call.name === 'Staking.bond_extra') await stakingBondExtraCallHandler(blockContext, call)
+				if (call.name === 'Staking.cancel_deferred_slash') await stakingCancelDeferredSlashCallHandler(blockContext, call)
+				if (call.name === 'Staking.chill') await stakingChillCallHandler(blockContext, call)
+				if (call.name === 'Staking.chill_other') await stakingChillOtherCallHandler(blockContext, call)
+				if (call.name === 'Staking.force_apply_min_commission') await stakingForceApplyMinCommissionCallHandler(blockContext, call)
+				if (call.name === 'Staking.force_new_era') await stakingForceNewEraCallHandler(blockContext, call)
+				if (call.name === 'Staking.force_new_era_always') await stakingForceNewEraAlwaysCallHandler(blockContext, call)
+				if (call.name === 'Staking.force_no_eras') await stakingForceNoErasCallHandler(blockContext, call)
+				if (call.name === 'Staking.force_unstake') await stakingForceUnstakeCallHandler(blockContext, call)
+				if (call.name === 'Staking.increase_validator_count') await stakingIncreaseValidatorCountCallHandler(blockContext, call)
+				if (call.name === 'Staking.kick') await stakingKickCallHandler(blockContext, call)
+				if (call.name === 'Staking.nominate') await stakingNominateCallHandler(blockContext, call)
+				if (call.name === 'Staking.payout_stakers') await stakingPayoutStakersCallHandler(blockContext, call)
+				if (call.name === 'Staking.reap_stash') await stakingReapStashCallHandler(blockContext, call)
+				if (call.name === 'Staking.rebond') await stakingRebondCallHandler(blockContext, call)
+				if (call.name === 'Staking.scale_validator_count') await stakingScaleValidatorCountCallHandler(blockContext, call)
+				if (call.name === 'Staking.set_controller') await stakingSetControllerCallHandler(blockContext, call)
+				if (call.name === 'Staking.set_history_depth') await stakingSetHistoryDepthCallHandler(blockContext, call)
+				if (call.name === 'Staking.set_invulnerables') await stakingSetInvulnerablesCallHandler(blockContext, call)
+				if (call.name === 'Staking.set_min_commission') await stakingSetMinCommissionCallHandler(blockContext, call)
+				if (call.name === 'Staking.set_payee') await stakingSetPayeeCallHandler(blockContext, call)
+				if (call.name === 'Staking.set_staking_configs') await stakingSetStakingConfigsCallHandler(blockContext, call)
+				if (call.name === 'Staking.set_validator_count') await stakingSetValidatorCountCallHandler(blockContext, call)
+				if (call.name === 'Staking.submit_election_solution') await stakingSubmitElectionSolutionCallHandler(blockContext, call)
+				if (call.name === 'Staking.submit_election_solution_unsigned')
+					await stakingSubmitElectionSolutionUnsignedCallHandler(blockContext, call)
+				if (call.name === 'Staking.unbond') await stakingUnbondCallHandler(blockContext, call)
+				if (call.name === 'Staking.validate') await stakingValidateCallHandler(blockContext, call)
+				if (call.name === 'Staking.withdraw_unbonded') await stakingWithdrawUnbondedCallHandler(blockContext, call)
+				if (call.name === 'OrderBook.place_limit_order') await orderBookPlaceLimitOrderCallHandler(blockContext, call)
+				if (call.name === 'OrderBook.cancel_limit_order') await orderBookCancelLimitOrderCallHandler(blockContext, call)
+				if (call.name === 'OrderBook.cancel_limit_orders_batch') await orderBookCancelLimitOrderCallHandler(blockContext, call)
+			}
+
+			if (item.kind === 'event') {
+				const { event } = item
+
+				if (event.name === 'EthBridge.IncomingRequestFinalized') await ethSoraTransferEventHandler(blockContext, event)
+				if (event.name === 'Tokens.Withdrawn') await tokenBurnEventHandler(blockContext, event)
+				if (event.name === 'Balances.Withdraw') await xorBurnEventHandler(blockContext, event)
+				if (event.name === 'Tokens.Deposited') await tokenMintEventHandler(blockContext, event)
+				if (event.name === 'Balances.Deposit') await xorMintEventHandler(blockContext, event)
+				if (event.name === 'XorFee.FeeWithdrawn') await networkFeeEventHandler(blockContext, event)
+				if (event.name === 'XorFee.ReferrerRewarded') await referrerRewardEventHandler(blockContext, event)
+				if (event.name === 'Tokens.Transfer' || event.name === 'Balances.Transfer') await transferEventHandler(blockContext, event)
+				if (event.name === 'Assets.AssetRegistered') await assetRegistrationEventHandler(blockContext, event)
+				if (event.name === 'XSTPool.SyntheticAssetEnabled') await syntheticAssetEnabledEventHandler(blockContext, event)
+				if (event.name === 'Staking.Rewarded') await stakingRewardedEventHandler(blockContext, event)
+				if (event.name === 'Staking.StakersElected') await stakingStakersElectedEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.OrderBookCreated') await orderBookCreatedEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.OrderBookStatusChanged') await orderBookStatusChangedEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.LimitOrderPlaced') await orderBookLimitOrderPlacedEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.LimitOrderExecuted') await orderBookLimitOrderExecutedEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.LimitOrderUpdated') await orderBookLimitOrderUpdatedEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.LimitOrderFilled') await orderBookLimitOrderFilledEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.LimitOrderCanceled') await orderBookLimitOrderCanceledEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.MarketOrderExecuted') await orderBookMarketOrderExecutedEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.LimitOrderConvertedToMarketOrder') await orderBookLimitOrderConvertedToMarketOrderEventHandler(blockContext, event)
+				if (event.name === 'OrderBook.LimitOrderIsSplitIntoMarketOrderAndLimitOrder') await orderBookLimitOrderIsSplitIntoMarketOrderAndLimitOrderEventHandler(blockContext, event)
+				if (event.name === 'XcmPallet.Attempted') await xcmPalletAttemptedHandler(blockContext, event)
+				if (event.name === 'SubstrateBridgeOutboundChannel.MessageAccepted') await messageAcceptedHandler(blockContext, event)
+				if (event.name === 'system.ExtrinsicFailed') await systemExtrinsicFailedHandler(blockContext, event)
+				if (event.name === 'system.ExtrinsicSuccess') await systemExtrinsicSuccessHandler(blockContext, event)
+				if (event.name === 'SubstrateDispatch.MessageDispatched') await messageDispatchedHandler(blockContext, event)
+				if (event.name === 'BridgeProxy.RequestStatusUpdate') await requestStatusUpdateHandler(blockContext, event)
+				if (event.name === 'ParachainBridgeApp.Minted') await mintedHandler(blockContext, event)
+				if (event.name === 'ParachainBridgeApp.Burned') await burnedHandler(blockContext, event)
+			}
+		}
+	}
+})

@@ -1,0 +1,95 @@
+{
+	"name": "sora-subsquid",
+	"version": "1.0.0",
+	"private": true,
+	"engines": {
+		"node": ">=20"
+	},
+	"husky": {
+		"hooks": {
+			"pre-commit": "lint-staged"
+		}
+	},
+	"lint-staged": {
+		"**/*.{js,jsx,ts,tsx,json,css,scss,md}": [
+			"prettier --write",
+			"git add"
+		]
+	},
+	"scripts": {
+		"build": "rm -rf lib && tsc",
+		"update": "npx npm-check-updates --filter /subsquid/ --upgrade && npm i -f",
+		"codegen": "sqd codegen",
+		"generate-migration": "npx squid-typeorm-migration generate",
+		"migrate": "npm run codegen && npm run build && npm run generate-migration && npm run db:migrate",
+		"format": "prettier --write \"**/*.ts\"",
+		"db:migrate": "npx squid-typeorm-migration apply",
+		"processor:start": "node lib/processor.js",
+		"query-node:start": "squid-graphql-server --subscriptions --max-response-size 10000 --dumb-cache in-memory --dumb-cache-ttl 1000 --dumb-cache-size 100 --dumb-cache-max-age 1000",
+
+		"fetch-spec-versions:production": "ts-node ./scripts/generate-fetch-spec-versions-command.ts production && ./scripts/fetch-spec-versions.sh",
+		"fetch-spec-versions:stage": "ts-node ./scripts/generate-fetch-spec-versions-command.ts stage && ./scripts/fetch-spec-versions.sh",
+		"fetch-spec-versions:test": "ts-node ./scripts/generate-fetch-spec-versions-command.ts test && ./scripts/fetch-spec-versions.sh",
+		"fetch-spec-versions:dev": "ts-node ./scripts/generate-fetch-spec-versions-command.ts dev && ./scripts/fetch-spec-versions.sh",
+
+		"fetch-spec-versions:all": "npm run fetch-spec-versions:production && npm run fetch-spec-versions:stage && npm run fetch-spec-versions:test && npm run fetch-spec-versions:dev",
+
+		"generate-types:production": "ts-node ./scripts/prepare-typegen-json.ts production && sqd typegen",
+		"generate-types:stage": "ts-node ./scripts/prepare-typegen-json.ts stage && sqd typegen",
+		"generate-types:test": "ts-node ./scripts/prepare-typegen-json.ts test && sqd typegen",
+		"generate-types:dev": "ts-node ./scripts/prepare-typegen-json.ts dev && sqd typegen",
+
+		"generate-types:all": "npm run generate-types:production && npm run generate-types:stage && npm run generate-types:test && npm run generate-types:dev",
+
+		"merge-types": "ts-node ./scripts/merge-types.ts",
+		"generate-types": "npm run fetch-spec-versions:all && npm run generate-types:all && npm run merge-types",
+
+		"generate-squid-yaml:production": "ts-node ./scripts/generate-squid-yaml.ts production",
+		"generate-squid-yaml:stage": "ts-node ./scripts/generate-squid-yaml.ts stage",
+		"generate-squid-yaml:test": "ts-node ./scripts/generate-squid-yaml.ts test",
+		"generate-squid-yaml:dev": "ts-node ./scripts/generate-squid-yaml.ts dev",
+
+		"deploy:production": "ts-node ./scripts/generate-squid-yaml.ts production && sqd deploy ./",
+		"deploy:stage": "ts-node ./scripts/generate-squid-yaml.ts stage && sqd deploy ./",
+		"deploy:test": "ts-node ./scripts/generate-squid-yaml.ts test && sqd deploy ./",
+		"deploy:dev": "ts-node ./scripts/generate-squid-yaml.ts dev && sqd deploy ./",
+		
+		"serve": "sqd serve",
+		"process": "sqd process",
+		"process:clean": "sqd down && sqd up && sqd process",
+		"process:clean:log": "unbuffer npm run process:clean | tee -a log.txt"
+	},
+	"dependencies": {
+		"@polkadot/api": "^10.0.1",
+		"@polkadot/util": "^11.0.1",
+		"@subsquid/archive-registry": "3.3.0",
+		"@subsquid/graphql-server": "^4.5.0",
+		"@subsquid/ss58": "^2.0.2",
+		"@subsquid/substrate-processor": "^8.1.1",
+		"@subsquid/typeorm-migration": "^1.3.0",
+		"@subsquid/typeorm-store": "^1.2.6",
+		"@subsquid/substrate-runtime": "^1.0.3",
+		"bignumber.js": "^9.1.1",
+		"dotenv": "^16.0.0",
+		"pg": "8.9.0",
+		"type-fest": "^3.7.2",
+		"type-graphql": "^1.2.0-rc.1",
+		"typeorm": "^0.3.17"
+	},
+	"devDependencies": {
+		"@subsquid/substrate-metadata-explorer": "^3.1.2",
+		"@subsquid/substrate-typegen": "^8.0.2",
+		"@subsquid/typeorm-codegen": "^1.3.3",
+		"@types/js-yaml": "^4.0.6",
+		"@types/node": "20.11.4",
+		"husky": "^8.0.3",
+		"js-yaml": "^4.1.0",
+		"lint-staged": "^15.0.2",
+		"prettier": "^3.0.3",
+		"ts-node": "^10.9.2",
+		"typescript": "5.3.3"
+	},
+	"overrides": {
+		"es5-ext": "0.10.35"
+	}
+}
