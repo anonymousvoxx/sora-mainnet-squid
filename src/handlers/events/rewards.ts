@@ -40,5 +40,5 @@ export async function stakingRewardedEventHandler(ctx: BlockContext, event: Even
 	await ctx.store.save(stakingReward)
 	getEventHandlerLog(ctx, event).debug({ stash, payeeType, payee, amount, era: stakingEra.index }, 'Staking reward saved')
 
-	await createEventHistoryElement(ctx, event, payee ?? (id as Address), { stash, payee, amount, era: stakingEra.index })
+	await createEventHistoryElement(ctx, event, { stash, payee, amount, era: stakingEra.index }, payee ?? (id as Address))
 }

@@ -112,7 +112,7 @@ const handleAndSaveExtrinsic = async (ctx: BlockContext, call: Call<'LiquidityPr
             }
 
             // create history element for receiver
-            await createEventHistoryElement(ctx, event, to, transfer)
+            await createEventHistoryElement(ctx, event, transfer, to)
         }
 	}
 

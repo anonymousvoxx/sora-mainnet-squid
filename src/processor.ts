@@ -62,16 +62,13 @@ import {
 	stakingWithdrawUnbondedCallHandler,
 } from './handlers/calls/staking'
 import {
-	transactionFeePaidHandler,
 	xcmPalletAttemptedHandler,
 	messageAcceptedHandler,
-	systemExtrinsicFailedHandler,
-	systemExtrinsicSuccessHandler,
 	messageDispatchedHandler,
 	requestStatusUpdateHandler,
 	mintedHandler,
 	burnedHandler
-} from './handlers/calls/bridge'
+} from './handlers/events/bridge'
 import { stakingStakersElectedEventHandler } from './handlers/events/staking'
 import { lookupArchive } from '@subsquid/archive-registry'
 import { syncStreams } from './handlers/sync/streams'
@@ -257,8 +254,6 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
 				if (event.name === 'OrderBook.LimitOrderIsSplitIntoMarketOrderAndLimitOrder') await orderBookLimitOrderIsSplitIntoMarketOrderAndLimitOrderEventHandler(blockContext, event)
 				if (event.name === 'XcmPallet.Attempted') await xcmPalletAttemptedHandler(blockContext, event)
 				if (event.name === 'SubstrateBridgeOutboundChannel.MessageAccepted') await messageAcceptedHandler(blockContext, event)
-				if (event.name === 'system.ExtrinsicFailed') await systemExtrinsicFailedHandler(blockContext, event)
-				if (event.name === 'system.ExtrinsicSuccess') await systemExtrinsicSuccessHandler(blockContext, event)
 				if (event.name === 'SubstrateDispatch.MessageDispatched') await messageDispatchedHandler(blockContext, event)
 				if (event.name === 'BridgeProxy.RequestStatusUpdate') await requestStatusUpdateHandler(blockContext, event)
 				if (event.name === 'ParachainBridgeApp.Minted') await mintedHandler(blockContext, event)

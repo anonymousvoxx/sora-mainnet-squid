@@ -20,7 +20,7 @@ class NetworkStatsStorage {
 
 	async sync(ctx: BlockContext): Promise<void> {
 		if (this.storage) {
-			getNetworkSnapshotsStorageLog(ctx).debug('Network stats sync')
+			await getNetworkSnapshotsStorageLog(ctx).debug('Network stats sync')
 			await ctx.store.save(this.storage)
 		}
 	}
@@ -61,11 +61,11 @@ class NetworkSnapshotsStorage {
 	}
 
 	private async syncStats(ctx: BlockContext): Promise<void> {
-		this.networkStatsStorage.sync(ctx)
+		await this.networkStatsStorage.sync(ctx)
 	}
 
 	private async syncSnapshots(ctx: BlockContext): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug(`Sync ${this.storage.size} snapshots`)
+		await getNetworkSnapshotsStorageLog(ctx).debug(`Sync ${this.storage.size} snapshots`)
 
 		await ctx.store.save([...this.storage.values()])
 
@@ -79,7 +79,7 @@ class NetworkSnapshotsStorage {
 			}
 		}
 
-		getNetworkSnapshotsStorageLog(ctx).debug(`${this.storage.size} snapshots in storage after sync`)
+		await getNetworkSnapshotsStorageLog(ctx).debug(`${this.storage.size} snapshots in storage after sync`)
 	}
 
 	public static getId(type: SnapshotType, index: number): string {
@@ -118,7 +118,7 @@ class NetworkSnapshotsStorage {
 	}
 
 	async updateAccountsStats(ctx: BlockContext): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug('Update accounts stats in network snapshots')
+		await getNetworkSnapshotsStorageLog(ctx).debug('Update accounts stats in network snapshots')
 		const stats = await this.networkStatsStorage.getStats(ctx)
 
 		stats.totalAccounts = stats.totalAccounts + 1
@@ -135,7 +135,7 @@ class NetworkSnapshotsStorage {
 	}
 
 	async updateTransactionsStats(ctx: BlockContext): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug('Update transactions stats in network snapshots')
+		await getNetworkSnapshotsStorageLog(ctx).debug('Update transactions stats in network snapshots')
 		const stats = await this.networkStatsStorage.getStats(ctx)
 
 		stats.totalTransactions = stats.totalTransactions + 1
@@ -152,7 +152,7 @@ class NetworkSnapshotsStorage {
 	}
 
 	async updateBridgeIncomingTransactionsStats(ctx: BlockContext): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug('Update bridge incoming transactions stats in network snapshots')
+		await getNetworkSnapshotsStorageLog(ctx).debug('Update bridge incoming transactions stats in network snapshots')
 		const stats = await this.networkStatsStorage.getStats(ctx)
 
 		stats.totalBridgeIncomingTransactions = stats.totalBridgeIncomingTransactions + 1
@@ -169,7 +169,7 @@ class NetworkSnapshotsStorage {
 	}
 
 	async updateBridgeOutgoingTransactionsStats(ctx: BlockContext): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug('Update bridge outgoing transactions stats in network snapshots')
+		await getNetworkSnapshotsStorageLog(ctx).debug('Update bridge outgoing transactions stats in network snapshots')
 		const stats = await this.networkStatsStorage.getStats(ctx)
 
 		stats.totalBridgeOutgoingTransactions = stats.totalBridgeOutgoingTransactions + 1
@@ -186,7 +186,7 @@ class NetworkSnapshotsStorage {
 	}
 
 	async updateFeesStats(ctx: BlockContext, fee: AssetAmount): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug({ fee }, 'Update fee stats in network snapshots')
+		await getNetworkSnapshotsStorageLog(ctx).debug({ fee }, 'Update fee stats in network snapshots')
 		const stats = await this.networkStatsStorage.getStats(ctx)
 
 		stats.totalFees = stats.totalFees + fee
@@ -203,7 +203,7 @@ class NetworkSnapshotsStorage {
 	}
 
 	async updateLiquidityStats(ctx: BlockContext, liquiditiesUSD: BigNumber): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug({ liquiditiesUSD }, 'Update liquidity stats in network snapshots')
+		await  getNetworkSnapshotsStorageLog(ctx).debug({ liquiditiesUSD }, 'Update liquidity stats in network snapshots')
 		
 		const snapshotTypes = getSnapshotTypes(ctx, NetworkSnapshots)
 
@@ -216,7 +216,7 @@ class NetworkSnapshotsStorage {
 	}
 
 	async updateVolumeStats(ctx: BlockContext, volumeUSD: BigNumber): Promise<void> {
-		getNetworkSnapshotsStorageLog(ctx).debug({ volumeUSD }, 'Update volume stats in network snapshot')
+		await  getNetworkSnapshotsStorageLog(ctx).debug({ volumeUSD }, 'Update volume stats in network snapshot')
 
 		const snapshotTypes = getSnapshotTypes(ctx, NetworkSnapshots)
 

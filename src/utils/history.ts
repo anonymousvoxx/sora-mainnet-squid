@@ -104,16 +104,16 @@ export const createCallHistoryElement = async (
 	call: Call<any>,
 	data?: {},
 ) => {
-	return createHistoryElement(ctx, { kind: 'call', entity: call }, data)
+	return await createHistoryElement(ctx, { kind: 'call', entity: call }, data)
 }
 
 export const createEventHistoryElement = async (
 	ctx: BlockContext,
 	event: Event<any>,
-	address: Address,
-	data?: {}
+	data?: {},
+	address?: Address
 ) => {
-	return createHistoryElement(ctx, { kind: 'event', entity: event }, data, address)
+	return await createHistoryElement(ctx, { kind: 'event', entity: event }, data, address)
 }
 
 export const addDataToHistoryElement = async (ctx: BlockContext, historyElement: HistoryElement, data: {}) => {
@@ -130,7 +130,7 @@ export const addDataToHistoryElement = async (ctx: BlockContext, historyElement:
 	historyElement.updatedAtBlock = ctx.block.header.height
 
 	await ctx.store.save(historyElement)
-	getUtilsLog(ctx).debug({
+	await getUtilsLog(ctx).debug({
 		historyElementId: historyElement.id,
 		data: JSON.stringify(data, (key, value) =>
 			typeof value === 'bigint'

@@ -1,7 +1,7 @@
 import { BlockContext, Event } from '../../types'
 import { getEventData } from '../../utils/entities'
 import { events } from '../../types/generated/merged'
-import { createHistoryElement } from '../../utils/history'
+import { createEventHistoryElement } from '../../utils/history'
 import { logStartProcessingEvent } from '../../utils/logs'
 
 
@@ -10,7 +10,7 @@ export async function xcmPalletAttemptedHandler(
 	event: Event<'XcmPallet.Attempted'>
 ): Promise<void> {
     ctx.log.info('start indexing XcmPallet.Attempted')
-	logStartProcessingEvent(ctx, event)
+	await logStartProcessingEvent(ctx, event)
 
   // const type = events.xcmPallet.attempted
 	// const data = getEventData(ctx, type, event)
@@ -20,10 +20,10 @@ export async function messageAcceptedHandler(
 	ctx: BlockContext,
 	event: Event<'SubstrateBridgeOutboundChannel.MessageAccepted'>
 ): Promise<void> {
-	logStartProcessingEvent(ctx, event)
+	await logStartProcessingEvent(ctx, event)
 
   const type = events.substrateBridgeOutboundChannel.messageAccepted
-	const data = getEventData(ctx, type, event)
+  const data = getEventData(ctx, type, event)
 
   const networkId = 'networkId' in data ? data.networkId : data[0]
   const batchNonce = 'batchNonce' in data ? data.batchNonce.toString() : null
@@ -35,7 +35,7 @@ export async function messageAcceptedHandler(
     messageNonce
   }
 
-	createHistoryElement(ctx, event, historyData)
+    await createEventHistoryElement(ctx, event, historyData)
 }
 
 
@@ -44,7 +44,7 @@ export async function systemExtrinsicFailedHandler(
 	ctx: BlockContext,
 	event: Event<'system.ExtrinsicFailed'>
 ): Promise<void> {
-	logStartProcessingEvent(ctx, event)
+	await logStartProcessingEvent(ctx, event)
 
   const type = events.system.extrinsicFailed
 	const data = getEventData(ctx, type, event)
@@ -69,14 +69,14 @@ export async function systemExtrinsicFailedHandler(
 
   if (typeof weight !== 'object') historyData.weight = weight.toString()
 
-	createHistoryElement(ctx, event, historyData)
+    await createEventHistoryElement(ctx, event, historyData)
 }
 
 export async function systemExtrinsicSuccessHandler(
 	ctx: BlockContext,
 	event: Event<'system.ExtrinsicSuccess'>
 ): Promise<void> {
-	logStartProcessingEvent(ctx, event)
+	await logStartProcessingEvent(ctx, event)
 
   const type = events.system.extrinsicSuccess
 	const data = getEventData(ctx, type, event)
@@ -99,14 +99,14 @@ export async function systemExtrinsicSuccessHandler(
 
   if (typeof weight !== 'object') historyData.weight = weight.toString()
 
-	createHistoryElement(ctx, event, historyData)
+    await createEventHistoryElement(ctx, event, historyData)
 }
 
 export async function messageDispatchedHandler(
 	ctx: BlockContext,
 	event: Event<'SubstrateDispatch.MessageDispatched'>
 ): Promise<void> {
-	logStartProcessingEvent(ctx, event)
+	await logStartProcessingEvent(ctx, event)
 
   const type = events.substrateDispatch.messageDispatched
 	const data = getEventData(ctx, type, event)
@@ -118,21 +118,18 @@ export async function messageDispatchedHandler(
   const receiver = 'receiver' in messageId ? messageId.receiver.value : null
   const batchNonce = 'batchNonce' in messageId ? messageId.batchNonce?.toString() ?? null : null
   const messageNonce = 'messageNonce' in messageId ? messageId.messageNonce?.toString() : null
+  const direction = 'direction' in messageId ? messageId.direction?.toString() : null
 
 	const historyData: Record<string, any>  = {
     sender,
     receiver,
     batchNonce,
     messageNonce,
-    result
+    result,
+    direction
   }
 
-  if (!('sender' in messageId)) {
-    historyData.direction = messageId.direction
-    historyData.messageNonce = messageId.nonce
-  }
-
-	createHistoryElement(ctx, event, historyData)
+    await createEventHistoryElement(ctx, event, historyData)
 }
 
 export async function requestStatusUpdateHandler(
@@ -149,7 +146,7 @@ export async function mintedHandler(
 	ctx: BlockContext,
 	event: Event<'ParachainBridgeApp.Minted'>
 ): Promise<void> {
-	logStartProcessingEvent(ctx, event)
+	await logStartProcessingEvent(ctx, event)
 
   // const type = events.parachainBridgeApp.minted
 	// const data = getEventData(ctx, type, event)
@@ -159,7 +156,7 @@ export async function burnedHandler(
 	ctx: BlockContext,
 	event: Event<'ParachainBridgeApp.Burned'>
 ): Promise<void> {
-	logStartProcessingEvent(ctx, event)
+	await logStartProcessingEvent(ctx, event)
 
   // const type = events.parachainBridgeApp.burned
 	// const data = getEventData(ctx, type, event)
